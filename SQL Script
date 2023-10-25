@@ -1,0 +1,181 @@
+1,  productcode = 'S18_3233'  -   This product is not brought by any customer and it stored in west
+
+                    "SELECT  p.warehousecode , w.warehousename 
+                    
+                    , p.productcode, o.ordernumber
+                    
+                    FROM ""mintclassics_DB"".warehouses w
+                    
+                    inner join ""mintclassics_DB"".products p
+                    on w.warehousecode = p.warehousecode
+                    
+                    left join ""mintclassics_DB"".orderdetails od 
+                    on od.productcode = p.productcode
+                    
+                    where w.warehousename  = 'East' and p.productcode = 'S18_3233'
+                    
+                    order by w.warehousename  
+                    
+                    ;"
+
+2,   Total count of all available productcode and ordercode .
+                    
+                    "SELECT  p.warehousecode , w.warehousename  
+                    ,  count(p.productcode )  , count(o.ordernumer) 
+                    FROM ""mintclassics_DB"".warehouses w
+                    
+                    inner join ""mintclassics_DB"".products p
+                    on w.warehousecode = p.warehousecode
+                    
+                    inner join ""mintclassics_DB"".orderdetails od 
+                    on od.productcode = p.productcode
+                    
+                    group by  p.warehousecode , w.warehousename 
+                    
+                    order by w.warehousename  
+                    "
+3 , Picked top 3 max and min value of product based on order count .to see which product have order most frequency.
+                    "
+                    Select a.warehousecode , a.warehousename , a.productcode , p.quantityinstock ,
+                    case 
+                      when  a.Top_Min  <= 3 then  a.countorder 
+                      Else b.countorder
+                    End 
+                    as CountList 
+                     from 
+                    (  
+                    SELECT
+                    w.warehousecode , w.warehousename , p.productcode , count( od.ordernumber ) as countorder ,
+                    ROW_NUMBER() over ( Partition by w.warehousecode , w.warehousename   order by count( od.ordernumber ) asc ) as Top_Min 
+                    FROM ""mintclassics_DB"".warehouses w
+                    
+                    inner join ""mintclassics_DB"".products p
+                    on w.warehousecode = p.warehousecode
+                    
+                    inner join ""mintclassics_DB"".orderdetails od 
+                    on od.productcode = p.productcode
+                    
+                    group by w.warehousecode , w.warehousename , p.productcode 
+                    
+                    ) a 
+                    inner join 
+                    (  
+                    SELECT
+                    w.warehousecode , w.warehousename , p.productcode , count( od.ordernumber ) as countorder ,
+                    ROW_NUMBER() over ( Partition by w.warehousecode , w.warehousename   order by count( od.ordernumber ) desc ) as Top_Max
+                    FROM ""mintclassics_DB"".warehouses w
+                    
+                    inner join ""mintclassics_DB"".products p
+                    on w.warehousecode = p.warehousecode
+                    
+                    inner join ""mintclassics_DB"".orderdetails od 
+                    on od.productcode = p.productcode
+                    
+                    group by w.warehousecode , w.warehousename , p.productcode 
+                    
+                    ) b
+                    on 
+                    a.warehousecode  = b.warehousecode and  a.warehousename =  b.warehousename and  a.productcode =  b.productcode 
+                    left join ""mintclassics_DB"".products p
+                    on p.productcode = b.productcode
+                    
+                    
+                    where a.Top_Min  <= 3 or  b.Top_Max  <= 3
+                    	
+                     
+                    
+                    	"
+
+
+4 , Identify seasonality and trends in demand by year ,month wise ordered by customer  for each warehouses 
+      
+                    "
+                    Select w.warehousecode , w.warehousename ,
+                    
+                    extract ( year from pay.paymentDate ) as Year ,
+                    extract ( Month from pay.paymentDate ) as Month ,
+                    count( o.ordernumber  ) as  ordernumber
+                    
+                    from  ""mintclassics_DB"".warehouses w
+                    inner join ""mintclassics_DB"".products p
+                    on w.warehousecode = p.warehousecode
+                    
+                    inner join ""mintclassics_DB"".orderdetails od 
+                    on od.productcode = p.productcode
+                    
+                    left join ""mintclassics_DB"".orders o 
+                    on o.ordernumber = od.ordernumber
+                    
+                    left join ""mintclassics_DB"".customers c
+                    on c.customernumber = o.customernumber
+                    
+                    left join ""mintclassics_DB"".payments pay
+                    on pay.customernumber = c.customernumber
+                    
+                    group by w.warehousecode , w.warehousename , extract ( year from pay.paymentDate ) ,extract ( Month from pay.paymentDate )
+                    
+                    order by 1,2,3,4,5"
+      
+
+5, Show the details of total sum of each product sold and quantity count.
+                      
+                      "    SELECT
+                              p.productcode ,
+                              p.productname ,
+                      	    od.quantityordered ,
+                              od.priceeach,
+                           	SUM( od.quantityordered ) OVER ( partition by  p.productcode ) AS total_quantitybyprdcode ,
+                      	    SUM( od.priceeach ) OVER ( partition by  p.productcode ) AS total_salebyprdcode 
+                              --- , SUM( od.priceeach ) OVER () AS total_sales
+                         
+                      from ""mintclassics_DB"".products p	
+                      inner join ""mintclassics_DB"".orderdetails od 
+                      on od.productcode = p.productcode
+                      
+                      left join ""mintclassics_DB"".orders o 
+                      on o.ordernumber = od.ordernumber
+                      
+                      left join ""mintclassics_DB"".customers c
+                      on c.customernumber = o.customernumber
+                      
+                      order by 1,2,3 "
+
+
+6, Top best 20% sold product details
+
+                      "WITH ProductSales AS (
+                          SELECT
+                              p.productcode ,
+                              p.productname ,
+                      	    od.quantityordered ,
+                              od.priceeach,
+                           	SUM( od.quantityordered ) OVER ( partition by  p.productcode ) AS total_quantitybyprdcode ,
+                      	    SUM( od.priceeach ) OVER ( partition by  p.productcode ) AS total_salebyprdcode 
+                              --- , SUM( od.priceeach ) OVER () AS total_sales
+                         
+                      from ""mintclassics_DB"".products p	
+                      inner join ""mintclassics_DB"".orderdetails od 
+                      on od.productcode = p.productcode
+                      
+                      left join ""mintclassics_DB"".orders o 
+                      on o.ordernumber = od.ordernumber
+                      
+                      left join ""mintclassics_DB"".customers c
+                      on c.customernumber = o.customernumber
+                      
+                      order by 3 
+                      )
+                      
+                      Select * from ( 
+                      
+                      SELECT
+                          productcode,
+                          productname,
+                          priceeach,
+                          (priceeach / total_salebyprdcode ) AS sales_percentage,
+                          SUM(priceeach / total_salebyprdcode ) OVER (ORDER BY (priceeach / total_salebyprdcode )  DESC) AS cumulative_percentage
+                      FROM ProductSales
+                      	
+                      	  ) a
+                      WHERE a.cumulative_percentage <= 0.8
+                      ORDER BY a.sales_percentage DESC;"
